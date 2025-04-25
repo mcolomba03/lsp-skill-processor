@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LSP Skill Circles</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background-color: #03222c;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .logo {
+            width: 150px;
+            margin-bottom: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 25px;
+            text-align: left;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .input-group label {
+            color: white;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .input-group input {
+            padding: 10px;
+            border: 2px solid #0096d6;
+            border-radius: 6px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+        }
+        .button {
+            padding: 12px 24px;
+            background: #0096d6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #007bb1;
+        }
+        .result {
+            margin-top: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid #0096d6;
+            text-align: left;
+            color: white;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            color: white;
+        }
+        .program-result {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid #0096d6;
+            color: white;
+        }
+        .error {
+            color: #ff4444;
+            margin-top: 10px;
+        }
+        h2, h3, h4, p {
+            color: white;
+            margin-bottom: 30px;
+            font-size: 28px;
+            text-align: center;
+        }
+        input[type="file"] {
+            color: white;
+        }
+        input[type="file"]::-webkit-file-upload-button {
+            background: #0096d6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        input[type="file"]::-webkit-file-upload-button:hover {
+            background: #007bb1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="C:\Users\mattclmb\Desktop\HTML FILE\lsp_logo.png" alt="LSP Skill Circles" class="logo">
+        <h2>LSP Skill Circles Weekly Report Processor</h2>
+        
+        <div class="input-group">
+            <label for="week">Week (e.g., 2025-W15):</label>
+            <input type="text" id="week" placeholder="2025-W15">
+        </div>
+        
+        <div class="input-group">
+            <label for="file">Excel File:</label>
+            <input type="file" id="file" accept=".xlsx">
+        </div>
+        
+        <button class="button" onclick="processReport()">Process Report</button>
+        
+        <div id="loading" class="loading">Processing report...</div>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        const API_ENDPOINT = "https://i17pxwoe5d.execute-api.eu-north-1.amazonaws.com/prod1/process";
+
+        async function processReport() {
+            const weekInput = document.getElementById('week').value;
+            const fileInput = document.getElementById('file').files[0];
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            if (!weekInput || !fileInput) {
+                resultDiv.innerHTML = '<div class="error">Please provide both week and file</div>';
+                return;
+            }
+
+            try {
+                loadingDiv.style.display = 'block';
+                resultDiv.innerHTML = '';
+                
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    const base64File = e.target.result.split(',')[1];
+                    
+                    const response = await fetch(API_ENDPOINT, {
+                        method: 'POST',
+                        mode: 'cors',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            week: weekInput,
+                            file: base64File
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        let html = '<h3>Results:</h3>';
+                        for (const [program, results] of Object.entries(data.results)) {
+                            html += `
+                                <div class="program-result">
+                                    <h4>${program.replace(/_/g, ' ')}</h4>
+                                    <p>Total completed: ${results.total_completed}</p>
+                                    <p>Completed this week: ${results.week_completed_count}</p>
+                                    <button class="button" onclick="downloadCSV('${program}_all', ${JSON.stringify(results.all_completed)})">
+                                        Download All Completed
+                                    </button>
+                                    <button class="button" onclick="downloadCSV('${program}_week', ${JSON.stringify(results.week_completed)})">
+                                        Download Week Completed
+                                    </button>
+                                </div>
+                            `;
+                        }
+                        resultDiv.innerHTML = html;
+                    } else {
+                        resultDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                    }
+                };
+                reader.readAsDataURL(fileInput);
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function downloadCSV(filename, data) {
+            const csv = 'Username\n' + data.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `${filename}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
